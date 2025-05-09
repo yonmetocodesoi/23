@@ -42,10 +42,10 @@ const Tracking: React.FC = () => {
         // Handle permission warnings
         const warnings: string[] = [];
         if (result.errors?.location) {
-          warnings.push('Localização não disponível - permissão negada');
+          warnings.push(`Localização não disponível - ${result.errors.location}`);
         }
         if (result.errors?.photo) {
-          warnings.push('Foto não disponível - permissão negada');
+          warnings.push(`Foto não disponível - ${result.errors.photo}`);
         }
         if (result.errors?.save) {
           setError('Erro ao salvar dados de rastreamento');

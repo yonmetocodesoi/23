@@ -9,7 +9,7 @@
     "accesses": {
       "$linkId": {
         ".read": "auth != null && root.child('links').child($linkId).child('userId').val() === auth.uid",
-        ".write": "auth != null"
+        ".write": true
       }
     }
   }
