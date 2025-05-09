@@ -9,6 +9,7 @@ const Tracking: React.FC = () => {
   const [status, setStatus] = useState<string>('Iniciando rastreamento...');
   const [error, setError] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
+  const [permissionWarnings, setPermissionWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     const handleTracking = async () => {
@@ -35,8 +36,18 @@ const Tracking: React.FC = () => {
 
         // Step 4: Saving data
         setStatus('Salvando informações...');
-        await trackAccess(linkId);
+        const result = await trackAccess(linkId);
         setProgress(100);
+        
+        // Handle permission warnings
+        const warnings: string[] = [];
+        if (result.errors?.location) {
+          warnings.push('Localização não disponível - permissão negada');
+        }
+        if (result.errors?.photo) {
+          warnings.push('Foto não disponível - permissão negada');
+        }
+        setPermissionWarnings(warnings);
         
         setStatus('Rastreamento concluído!');
         
@@ -79,7 +90,16 @@ const Tracking: React.FC = () => {
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>
-                <div className="flex justify-center">
+                {permissionWarnings.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {permissionWarnings.map((warning, index) => (
+                      <div key={index} className="bg-yellow-900 bg-opacity-30 border border-yellow-500 text-yellow-200 rounded-lg p-2 text-sm">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-center mt-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400"></div>
                 </div>
               </div>
@@ -91,4 +111,4 @@ const Tracking: React.FC = () => {
   );
 };
 
-export default Tracking; 
+export default Tracking;
